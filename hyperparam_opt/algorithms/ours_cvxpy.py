@@ -1,3 +1,4 @@
+import cvxpy as cp
 import numpy as np
 import time
 
@@ -11,116 +12,74 @@ sys.path.append('..')
 
 from utils import load_diabetes, train_val_test_split
 
-def lag_F(w, b, xi, mu, C, gamma, y_val, z_val, y_train, z_train):
-    x = torch.reshape(torch.Tensor(y_val), (torch.Tensor(y_val).shape[0],1)) 
-    x = x* F.linear(torch.Tensor(z_val), w, b)
-    loss_upper= torch.sum(torch.exp(1-x))
-
-    loss_lower = (1/2) * (w**2).sum()
-
-    restr_lower1 = 1 - xi - y_train * F.linear(z_train, w, b).squeeze()
-    restr_lower2 = xi - C
-    restr_lower = torch.cat([restr_lower1, restr_lower2], dim=0)
-
-    return loss_upper + gamma*loss_lower + mu @ restr_lower
-
-def lag_g(w, b, xi, mu, C, gamma, y_val, z_val, y_train, z_train):
-
-    loss_lower = (1/2) * (w**2).sum()
-
-    restr_lower1 = 1 - xi - y_train * F.linear(z_train, w, b).squeeze()
-    restr_lower2 = xi - C
-    restr_lower = torch.cat([restr_lower1, restr_lower2], dim=0)
-
-    return loss_lower + mu @ restr_lower
-
-def minmax_opt(w, b, xi, mu, lag_fn, C, gamma, eta1, eta2, T, Ty, y_val, z_val, y_train, z_train):
-
-    for t in range(T):
-
-        mu.requires_grad_(False)
-        w.requires_grad_(True)
-        b.requires_grad_(True)
-        xi.requires_grad_(True)
-
-        for ty in range(Ty):
-            lag_val = lag_fn(w, b, xi, mu, C, gamma, y_val, z_val, y_train, z_train)
-
-            # Reset grads
-            w.grad = None
-            b.grad = None
-            xi.grad = None
-
-            lag_val.backward()
-            grad_w = w.grad.detach().clone()
-            grad_b = b.grad.detach().clone()
-            grad_xi = xi.grad.detach().clone()
-
-            #print(f"{lag_val=} {torch.linalg.norm(grad_w)=}")
-            w.data -= eta1*grad_w
-            b.data -= eta1*grad_b
-            xi.data = torch.maximum(torch.tensor(1e-4), xi.data - eta1*grad_xi)
-
-            if torch.linalg.norm(grad_w) + torch.linalg.norm(grad_b) + torch.linalg.norm(grad_xi) < 1e-4:
-                break
-
-        mu.requires_grad_(True)
-        w.requires_grad_(False)
-        b.requires_grad_(False)
-        xi.requires_grad_(False)
-        lag_val = lag_fn(w, b, xi, mu, C, gamma, y_val, z_val, y_train, z_train)
-
-        #print(f"LAG VAL IN OUTER {lag_val=}")
-        mu.grad = None
-        lag_val.backward()
-        grad_mu = mu.grad.detach().clone()
-        #print(f"{grad_mu=}")
-        mu.data = torch.maximum(torch.tensor(1e-4), mu.data + eta2*grad_mu)
-        if torch.linalg.norm(grad_mu) < 1e-4:
-            break
-
-    mu.requires_grad_(False)
-    w.requires_grad_(False)
-    b.requires_grad_(False)
-    xi.requires_grad_(False)
-
-    #print(w)
-
-    return w, b, xi, mu
 
 def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, verbose=True):
     feature=x_train.shape[1] # = 8
-
-    # Dataset to tensor
-    y_train = torch.tensor(y_train).float()
-    x_train = torch.tensor(x_train).float()
-    y_val = torch.tensor(y_val).float()
-    x_val = torch.tensor(x_val).float()
-    y_test = torch.tensor(y_test).float()
-    x_test = torch.tensor(x_test).float()
-    
-    ###### Parameters
-    eta = hparams['eta']
-    eta1g = hparams['eta1g']
-    eta2g = hparams['eta2g']
-    eta1F = hparams['eta1F']
-    eta2F = hparams['eta2F']
-    gam = hparams['gam']
-    T = hparams['T']
-    Ty = hparams['Ty']
-
-    # Initialization of upper and lower level variables
+    ######### parameters
     C_tensor_val= torch.Tensor(x_train.shape[0]).uniform_(1.,5.)
 
-    wg = torch.zeros(1,feature)
-    bg = torch.tensor(1.)
-    xig = torch.zeros(y_train.shape[0])
-    mug = torch.zeros(2*y_train.shape[0])
+    ###### Ours paramter
+    eta = hparams['eta']
+    gam = hparams['gam']
 
-    wF = wg.clone()
-    bF = bg.clone()
-    xiF = xig.clone()
-    muF = mug.clone()
+    C = cp.Parameter(y_train.shape[0], nonneg=True)
+    
+    # Parameters for eq. (12)
+    w = cp.Variable(feature)
+    b = cp.Variable()
+    xi = cp.Variable(y_train.shape[0], nonneg=True)
+    
+
+    # Parameters for eq. (13)
+    w_F = cp.Variable(feature)
+    b_F = cp.Variable()
+    xi_F = cp.Variable(y_train.shape[0], nonneg=True)
+
+    ######### 2 level objectives
+    loss_lower =  0.5*cp.norm(w, 2)**2# + 0.5 * (cp.scalar_product(C, cp.power(xi,2))) # cp.exp(C)
+        
+    # Compute the final expression
+    
+    loss_lower_F =  0.5*cp.norm(w_F, 2)**2# + 0.5  * (cp.scalar_product( C,  cp.power(xi_F,2)))
+    loss_upper =  cp.sum(
+        # cp.maximum(
+        #     0, 1- cp.multiply(y_val, x_val@w_F + b_F)
+        # )**2
+        cp.exp( 1 - cp.multiply(y_val, x_val@w_F + b_F) )
+    )
+
+    # Create two constraints.
+    constraints=[]
+    constraints_value=[]
+    for i in range(y_train.shape[0]):
+        constraints.append(1 - xi[i] - y_train[i] * (cp.scalar_product(w, x_train[i])+b) <= 0)
+        constraints_value.append(1 - xi[i] - y_train[i] * (cp.scalar_product(w, x_train[i])+b) )
+    
+    constraints_xi = [xi <= C]
+
+    constraints_F=[]
+    constraints_value_F=[]
+    for i in range(y_train.shape[0]):
+        constraints_F.append(1 - xi_F[i] - y_train[i] * (cp.scalar_product(w_F, x_train[i])+b_F) <= 0)
+        constraints_value_F.append(1 - xi_F[i] - y_train[i] * (cp.scalar_product(w_F, x_train[i])+b_F) )
+
+    constraints_xi_F = [xi_F <= C]
+
+    # Form objective.
+    obj_lower = cp.Minimize(loss_lower)
+
+    obj_F = cp.Minimize(loss_lower_F + 1/gam*loss_upper)
+
+    # Form and solve problem.
+    prob_lower = cp.Problem(obj_lower, constraints + constraints_xi)
+    prob_F = cp.Problem(obj_F, constraints_F + constraints_xi_F)
+
+    w_tensor = torch.ones(1,feature)
+    b_tensor = torch.tensor(0.)
+    xi_tensor = torch.tensor(y_train.shape[0])
+    w_F_tensor = w_tensor.clone()
+    b_F_tensor = b_tensor.clone()
+    xi_F_tensor = xi_tensor.clone()
     
     # For storage
     val_loss_list=[]
@@ -137,55 +96,53 @@ def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, verbos
 
         variables.append({
             'C': C_tensor_val,
-            'xi': xig,
-            'w': wg,
-            'b': bg,
-            'xi_F': xiF,
-            'w_F': wF,
-            'b_F': bF
+            'xi': xi_tensor,
+            'w': w_tensor,
+            'b': b_tensor,
+            'xi_F': xi_F_tensor,
+            'w_F': w_F_tensor,
+            'b_F': b_F_tensor
         })
 
-        x = torch.reshape(y_val, (y_val.shape[0],1)) 
-        x = x* F.linear(x_val, wF, bF) # / torch.linalg.norm(w_tensor)
+        x = torch.reshape(torch.Tensor(y_val), (torch.Tensor(y_val).shape[0],1)) 
+        x = x* F.linear(torch.Tensor(x_val), w_F_tensor, b_F_tensor) # / torch.linalg.norm(w_tensor)
 
-        x1 = torch.reshape(y_test, (y_test.shape[0],1)) 
-        x1 = x1 * F.linear(x_test, wF, bF) # / torch.linalg.norm(w_tensor)
+        x1 = torch.reshape(torch.Tensor(y_test), (torch.Tensor(y_test).shape[0],1)) 
+        x1 = x1 * F.linear(torch.Tensor(x_test), w_F_tensor, b_F_tensor) # / torch.linalg.norm(w_tensor)
         # test_loss_upper= torch.sum(torch.sigmoid(x1))
         test_loss_upper= torch.sum(torch.exp(1-x1))
 
         val_loss_F = (torch.sum(torch.exp(1-x))).detach().numpy()/y_val.shape[0]
         test_loss_F = test_loss_upper.detach().numpy()/y_test.shape[0]
 
-        x = torch.reshape(y_val, (y_val.shape[0],1))
-        x = x* F.linear(x_val, wg, bg) # / torch.linalg.norm(wg)
+        x = torch.reshape(torch.Tensor(y_val), (torch.Tensor(y_val).shape[0],1)) 
+        x = x* F.linear(torch.Tensor(x_val), w_tensor, b_tensor) # / torch.linalg.norm(w_tensor)
 
-        x1 = torch.reshape(y_test, (y_test.shape[0],1)) 
-        x1 = x1 * F.linear(x_test, wg, bg) # / torch.linalg.norm(wg)
+        x1 = torch.reshape(torch.Tensor(y_test), (torch.Tensor(y_test).shape[0],1)) 
+        x1 = x1 * F.linear(torch.Tensor(x_test), w_tensor, b_tensor) # / torch.linalg.norm(w_tensor)
+        # test_loss_upper= torch.sum(torch.sigmoid(x1))
         test_loss_upper= torch.sum(torch.exp(1-x1))
 
         val_loss = (torch.sum(torch.exp(1-x))).detach().numpy()/y_val.shape[0]
         test_loss = test_loss_upper.detach().numpy()/y_test.shape[0]
 
-        loss_upper = val_loss
-        loss_lower = (1/2) * (wg**2).sum()
-
         ###### Accuracy
-        q = y_train * (wg @ x_train.T + bg)
+        q = torch.tensor(y_train) * (w_tensor @ x_train.T + b_tensor)
         train_acc = (q>0).sum() / len(y_train)
 
-        q = y_val * (wg @ x_val.T + bg)
+        q = torch.tensor(y_val) * (w_tensor @ x_val.T + b_tensor)
         val_acc = (q>0).sum() / len(y_val)
 
-        q = y_test * (wg @ x_test.T + bg)
+        q = torch.tensor(y_test) * (w_tensor @ x_test.T + b_tensor)
         test_acc = (q>0).sum() / len(y_test)
 
-        q = y_train * (wF @ x_train.T + bF)
+        q = torch.tensor(y_train) * (w_F_tensor @ x_train.T + b_F_tensor)
         train_acc_F = (q>0).sum() / len(y_train)
 
-        q = y_val * (wF @ x_val.T + bF)
+        q = torch.tensor(y_val) * (w_F_tensor @ x_val.T + b_F_tensor)
         val_acc_F = (q>0).sum() / len(y_val)
 
-        q = y_test * (wF @ x_test.T + bF)
+        q = torch.tensor(y_test) * (w_F_tensor @ x_test.T + b_F_tensor)
         test_acc_F = (q>0).sum() / len(y_test)
 
         metrics.append({
@@ -201,28 +158,65 @@ def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, verbos
             'test_acc': test_acc,
             'test_acc_F': test_acc_F,
             'loss_upper': loss_upper,
-            'loss_lower': loss_lower,
+            'loss_lower': prob_lower.value,
             'time_computation': time.time()-algorithm_start_time
         })
 
-        # Finding lower level variables and Lagrange Multipliers
-        wg, bg, xig, mug = minmax_opt(wg, bg, xig, mug, lag_g, C_tensor_val, gam, eta1g, eta2g, T, Ty, y_val, x_val, y_train, x_train)
-        wF, bF, xiF, muF = minmax_opt(wF, bF, xiF, muF, lag_F, C_tensor_val, gam, eta1F, eta2F, T, Ty, y_val, x_val, y_train, x_train)
+        c_array_value_np = C_tensor_val.detach().numpy()# /c_array_tensor.detach().numpy().sum()
+        # print(c_array_value_np.sum(),sum(c_array))
+        C.value = c_array_value_np
+
+        ###### Solve Eq.(12), (13)
+        begin=time.time()
+        try:
+            prob_lower.solve(solver='ECOS', abstol=2e-3,reltol=2e-3,max_iters=1000000000, warm_start=True)  
+            prob_F.solve(solver='ECOS', abstol=2e-3,reltol=2e-3,max_iters=1000000000, warm_start=True)
+        except:
+            print(C.value)
+            print(prob_lower.status)
+            print(prob_F.status)
+            prob_lower.solve(solver='SCS')  
+            prob_F.solve(solver='SCS')
+            raise RuntimeError("Lo he resuelto")
+        end=time.time()
+        # print("time: ",end-begin)
+
+        dual_variables = np.array([ constraints[i].dual_value for i in range(len(constraints))])
+        constraints_value_1= np.array([ constraints_value[i].value for i in range(len(constraints))])
+        dual_variables_xi = constraints_xi[0].dual_value
         
-        # Upper level iteration
-        C_tensor_val.requires_grad_(True)
+        dual_variables_F = np.array([ constraints_F[i].dual_value for i in range(len(constraints_F))])
+        constraints_value_1_F= np.array([ constraints_value_F[i].value for i in range(len(constraints_F))])
+        dual_variables_xi_F = constraints_xi_F[0].dual_value
 
-        x = torch.reshape(y_val, (y_val.shape[0],1)) 
-        x = x* F.linear(x_val, wF, bF)
-        loss_upper= torch.sum(torch.exp(1-x)) + torch.linalg.norm(C_tensor_val)
+        ############# Calculate gradient
+        try:
+            w_tensor=torch.Tensor(np.array([w.value])) #.requires_grad_()
+        except:
+            print(prob_lower.status)
+            print(prob_F.status)
+            print(w_tensor)
+            raise RuntimeError("HE DADO NONE")
+        b_tensor=torch.Tensor(np.array([b.value])) #.requires_grad_()
+        xi_tensor =torch.Tensor(np.array([xi.value]))
+        C_tensor=torch.Tensor(np.array([C.value])).requires_grad_()
+                
+        ############# Calculate gradient 
+        w_F_tensor=torch.Tensor(np.array([w_F.value])) #.requires_grad_()
+        b_F_tensor=torch.Tensor(np.array([b_F.value])) #.requires_grad_()
+        xi_F_tensor =torch.Tensor(np.array([xi_F.value]))
 
-        C_tensor_val.grad = None # Reset gradients
+        x = torch.reshape(torch.Tensor(y_val), (torch.Tensor(y_val).shape[0],1)) 
+        x = x* F.linear(torch.Tensor(x_val), w_F_tensor, b_F_tensor) # / torch.linalg.norm(w_tensor)
+        loss_upper= torch.sum(torch.exp(1-x)) + torch.linalg.norm(C_tensor)
+
         loss_upper.backward()
 
         ############# update on upper level variable C
-        C_tensor_val.data -= eta*(C_tensor_val.grad.detach() + gam*mug[y_train.shape[0]:] - muF[y_train.shape[0]:])
-        C_tensor_val.data = torch.maximum(C_tensor_val.data, torch.tensor(1e-4))
-        C_tensor_val.requires_grad_(False)
+        C_tensor_val = C_tensor.detach()
+        C_tensor_val -= eta*(C_tensor.grad.detach() + gam*dual_variables_xi - gam*dual_variables_xi_F) #the second gam* is due to the 1/gam in obj_F
+        #C_tensor_val -= eta*(gam*dual_variables_xi) - dual_variables_xi_F
+        C_tensor_val = torch.maximum(C_tensor_val, torch.tensor(1e-4))[0,:]
         
         #################
         if epoch%20==0 and verbose:
