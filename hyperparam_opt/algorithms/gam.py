@@ -13,7 +13,7 @@ sys.path.append('..')
 from utils import load_diabetes, train_val_test_split
 
 
-def gam(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, verbose=True):
+def gam(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, early_stopping_th = False, verbose=True):
 
     c_array= torch.Tensor(x_train.shape[0]).uniform_(-7.0,-6.0)
     #c_array= torch.Tensor(x_train.shape[0]).uniform_(1.0,2.0)
@@ -168,7 +168,9 @@ def gam(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, verbose
               "test acc: {:.2f}".format(test_acc),
               "test loss: {:.2f}".format(test_loss),
               "round: {}".format(epoch))
-
+        
+        if np.linalg.norm(grad_update) < early_stopping_th:
+            break
     return metrics,variables
 
 

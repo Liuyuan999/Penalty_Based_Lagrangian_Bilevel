@@ -84,7 +84,7 @@ class LinearSVM(nn.Module):
     def second_constraint_val(self):
         return self.xi - self.C
 
-def lv_hba(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, compute_opt=False, verbose=True):
+def lv_hba(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, compute_opt=False, early_stopping_th = False, verbose=True):
 
     batch_size = 256
     data_train = TensorDataset(
@@ -350,6 +350,9 @@ def lv_hba(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, comp
               "test acc: {:.2f}".format(test_acc),
               "test loss: {:.2f}".format(test_loss),
               "round: {}".format(epoch))
+            
+        if torch.linalg.norm(d1) < early_stopping_th:
+            break
 
     return metrics, variables
 
