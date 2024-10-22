@@ -49,11 +49,9 @@ def minmax_opt(w, b, mu, lag_fn, C, gamma, eta1, eta2, T, Ty, y_val, z_val, y_tr
             grad_w = w.grad.detach().clone()
             grad_b = b.grad.detach().clone()
 
-            #print(f"{lag_val=} {torch.linalg.norm(grad_w)=}")
             w.data -= eta1*grad_w
             b.data -= eta1*grad_b
         
-
             if torch.linalg.norm(grad_w) + torch.linalg.norm(grad_b) < 1e-4:
                 break
 
@@ -62,11 +60,9 @@ def minmax_opt(w, b, mu, lag_fn, C, gamma, eta1, eta2, T, Ty, y_val, z_val, y_tr
         b.requires_grad_(False)
         lag_val = lag_fn(w, b, mu, C, gamma, y_val, z_val, y_train, z_train)
 
-        #print(f"LAG VAL IN OUTER {lag_val=}")
         mu.grad = None
         lag_val.backward()
         grad_mu = mu.grad.detach().clone()
-        #print(f"{grad_mu=}")
         mu.data = torch.maximum(torch.tensor(1e-5), mu.data + eta2*grad_mu)
         if torch.linalg.norm(grad_mu) < 1e-4:
             break
@@ -75,11 +71,9 @@ def minmax_opt(w, b, mu, lag_fn, C, gamma, eta1, eta2, T, Ty, y_val, z_val, y_tr
     w.requires_grad_(False)
     b.requires_grad_(False)
 
-    #print(w)
-
     return w, b, mu
 
-def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, early_stopping_th = False,verbose=True):
+def blocc(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, early_stopping_th = False,verbose=True):
     feature=x_train.shape[1] # = 8
 
     # Dataset to tensor
@@ -222,7 +216,6 @@ def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, early_
               "val loss: {:.2f}".format(val_loss),
               "test acc: {:.2f}".format(test_acc),
               "test loss: {:.2f}".format(test_loss))
-            # print(f"Epoch [{j}/{epoch}]:","upper_loss: ", loss_upper.detach().numpy()/15.0, "test_loss_upper: ", test_loss_upper.detach().numpy()/11.8)
 
         val_loss_list.append(val_loss) # length 150
         test_loss_list.append(test_loss) # length 118
@@ -239,35 +232,7 @@ def ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs, early_
 if __name__ == "__main__":
     ############ Load data code ###########
 
-    data_utils = load_diabetes()
-
-    data_list=[]
-
-    f = open("../diabete.txt",encoding = "utf-8")
-    a_list=f.readlines()
-    f.close()
-    for line in a_list:
-        line1=line.replace('\n', '')
-        line2=list(line1.split(' '))
-        y=float(line2[0])
-        x= [float(line2[i].split(':')[1]) for i in (1,2,3,4,5,6,7,8)]
-        data_list.append(x+[y])
-
-
-    data_array_1=np.array(data_list)[:,:-1]
-    data_array_0=np.ones((data_array_1.shape[0],1))
-    data_array_2=data_array_1*data_array_1
-    data_array_3=np.empty((data_array_1.shape[0],0))
-
-    for i in range(data_array_1.shape[1]):
-        for j in range(data_array_1.shape[1]):
-            if i<j:
-                data_array_i=data_array_1[:,i]*data_array_1[:,j]
-                data_array_i=np.reshape(data_array_i,(-1,1))
-                data_array_3=np.hstack((data_array_3,data_array_i))
-
-    data_array_4=np.reshape(np.array(data_list)[:,-1],(-1,1))
-    data=np.hstack((data_array_0,data_array_1,data_array_2,data_array_3,data_array_4))
+    data = load_diabetes()
 
     n_train = 500
     n_val = 150
@@ -281,24 +246,24 @@ if __name__ == "__main__":
     }
 
     epochs = 80
-    plot_results = True
+    plot_results = False
 
     for seed in range(10):
 
         x_train, y_train, x_val, y_val, x_test, y_test = train_val_test_split(data, seed, n_train, n_val)
 
-        metrics_seed, variables_seed = ours(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs)
+        metrics_seed, variables_seed = blocc(x_train, y_train, x_val, y_val, x_test, y_test, hparams, epochs)
         metrics.append(metrics_seed)
         variables_seed.append(variables_seed)
 
-    train_acc = np.array([[x['train_acc'] for x in metrics] for metrics in metrics])
-    val_acc = np.array([[x['val_acc'] for x in metrics] for metrics in metrics])
-    test_acc = np.array([[x['test_acc'] for x in metrics] for metrics in metrics])
+    train_acc = np.array([[x['train_acc'] for x in metric] for metric in metrics])
+    val_acc = np.array([[x['val_acc'] for x in metric] for metric in metrics])
+    test_acc = np.array([[x['test_acc'] for x in metric] for metric in metrics])
 
-    val_loss = np.array([[x['val_loss'] for x in metrics] for metrics in metrics])
-    test_loss = np.array([[x['test_loss'] for x in metrics] for metrics in metrics])
+    val_loss = np.array([[x['val_loss'] for x in metric] for metric in metrics])
+    test_loss = np.array([[x['test_loss'] for x in metric] for metric in metrics])
 
-    time_computation = np.array([[x['time_computation'] for x in metrics] for metrics in metrics])
+    time_computation = np.array([[x['time_computation'] for x in metric] for metric in metrics])
 
     if plot_results:
         val_loss_mean=np.mean(val_loss,axis=0)

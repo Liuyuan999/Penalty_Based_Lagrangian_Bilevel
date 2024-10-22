@@ -362,35 +362,6 @@ if __name__ == "__main__":
 
     data = load_diabetes()
 
-    data_list=[]
-
-    f = open("../diabete.txt",encoding = "utf-8")
-    a_list=f.readlines()
-    f.close()
-    for line in a_list:
-        line1=line.replace('\n', '')
-        line2=list(line1.split(' '))
-        y=float(line2[0])
-        x= [float(line2[i].split(':')[1]) for i in (1,2,3,4,5,6,7,8)]
-        data_list.append(x+[y])
-
-
-    data_array_1=np.array(data_list)[:,:-1]
-    data_array_0=np.ones((data_array_1.shape[0],1))
-    data_array_2=data_array_1*data_array_1
-    data_array_3=np.empty((data_array_1.shape[0],0))
-
-    for i in range(data_array_1.shape[1]):
-        for j in range(data_array_1.shape[1]):
-            if i<j:
-                data_array_i=data_array_1[:,i]*data_array_1[:,j]
-                data_array_i=np.reshape(data_array_i,(-1,1))
-                data_array_3=np.hstack((data_array_3,data_array_i))
-
-    data_array_4=np.reshape(np.array(data_list)[:,-1],(-1,1))
-    data=np.hstack((data_array_0,data_array_1,data_array_2,data_array_3,data_array_4))
-
-
     n_train = 500
     n_val = 150
 
@@ -405,7 +376,7 @@ if __name__ == "__main__":
     }
 
     epochs = 80
-    plot_results = True
+    plot_results = False
 
     for seed in range(10):
 
@@ -415,14 +386,14 @@ if __name__ == "__main__":
         metrics.append(metrics_seed)
         variables_seed.append(variables_seed)
 
-    train_acc = np.array([[x['train_acc'] for x in metrics] for metrics in metrics])
-    val_acc = np.array([[x['val_acc'] for x in metrics] for metrics in metrics])
-    test_acc = np.array([[x['test_acc'] for x in metrics] for metrics in metrics])
+    train_acc = np.array([[x['train_acc'] for x in metric] for metric in metrics])
+    val_acc = np.array([[x['val_acc'] for x in metric] for metric in metrics])
+    test_acc = np.array([[x['test_acc'] for x in metric] for metric in metrics])
 
-    val_loss = np.array([[x['val_loss'] for x in metrics] for metrics in metrics])
-    test_loss = np.array([[x['test_loss'] for x in metrics] for metrics in metrics])
+    val_loss = np.array([[x['val_loss'] for x in metric] for metric in metrics])
+    test_loss = np.array([[x['test_loss'] for x in metric] for metric in metrics])
 
-    time_computation = np.array([[x['time_computation'] for x in metrics] for metrics in metrics])
+    time_computation = np.array([[x['time_computation'] for x in metric] for metric in metrics])
 
     if plot_results:
         val_loss_mean=np.mean(val_loss,axis=0)

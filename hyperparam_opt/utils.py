@@ -3,7 +3,7 @@ import numpy as np
 def load_fourclass():
     data_list=[]
 
-    f = open("fourclass.txt",encoding = "utf-8")
+    f = open("datasets/fourclass.txt",encoding = "utf-8")
     a_list=f.readlines()
     f.close()
     for line in a_list:
@@ -16,7 +16,7 @@ def load_fourclass():
     return np.array(data_list)
 
 def load_diabetes():
-    f = open("diabete.txt",encoding = "utf-8")
+    f = open("datasets/diabete.txt",encoding = "utf-8")
     a_list=f.readlines()
     f.close()
 

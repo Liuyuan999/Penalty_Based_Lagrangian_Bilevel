@@ -191,7 +191,7 @@ if __name__ == "__main__":
     }
 
     epochs = 80
-    plot_results = True
+    plot_results = False
 
     for seed in range(10):
 
@@ -201,14 +201,14 @@ if __name__ == "__main__":
         metrics.append(metrics_seed)
         variables_seed.append(variables_seed)
 
-    train_acc = np.array([[x['train_acc'] for x in metrics] for metrics in metrics])
-    val_acc = np.array([[x['val_acc'] for x in metrics] for metrics in metrics])
-    test_acc = np.array([[x['test_acc'] for x in metrics] for metrics in metrics])
+    train_acc = np.array([[x['train_acc'] for x in metric] for metric in metrics])
+    val_acc = np.array([[x['val_acc'] for x in metric] for metric in metrics])
+    test_acc = np.array([[x['test_acc'] for x in metric] for metric in metrics])
 
-    val_loss = np.array([[x['val_loss'] for x in metrics] for metrics in metrics])
-    test_loss = np.array([[x['test_loss'] for x in metrics] for metrics in metrics])
+    val_loss = np.array([[x['val_loss'] for x in metric] for metric in metrics])
+    test_loss = np.array([[x['test_loss'] for x in metric] for metric in metrics])
 
-    time_computation = np.array([[x['time_computation'] for x in metrics] for metrics in metrics])
+    time_computation = np.array([[x['time_computation'] for x in metric] for metric in metrics])
 
     if plot_results:
         val_loss_mean=np.mean(val_loss,axis=0)
