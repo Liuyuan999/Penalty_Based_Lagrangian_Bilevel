@@ -4,7 +4,7 @@
 
 This repository provides the implementation of the BLOCC algorithm for bilevel optimization problems with coupled constraints, as presented in our NeurIPS 2024 paper:
 
-> Liuyuan Jiang, Quan Xiao, Victor M. Tenorio, Fernando Real-Rojas, Antonio G. Marques and Tianyi Chen, "A Primal-Dual-Assisted Penalty Approach to Bilevel Optimization with Coupled Constraints", arXiv preprint arXiv:2406.10148, 2024.
+> Liuyuan Jiang, Quan Xiao, Victor M. Tenorio, Fernando Real-Rojas, Antonio G. Marques and Tianyi Chen, "A Primal-Dual-Assisted Penalty Approach to Bilevel Optimization with Coupled Constraints", Thirty-Eighth Annual Conference on Neural Information Processing Systems NeurIPS 2024, Vancouver, Canada, 10-15 Dec 2024.
 
 The paper presents an effective way to deal with Bilevel Optimization problems with coupled constraints by means of a (fully) first-order algorithm, which makes it scalable and efficient.
 
@@ -24,10 +24,10 @@ The experiments are run over Jupyter Python notebooks (toy example and hyperpara
 If you find our work interesting, please consider citing this paper:
 
 ```
-@article{jiang2024primaldual,
+@inproceedings{jiang2024primaldual,
   title={A Primal-Dual-Assisted Penalty Approach to Bilevel Optimization with Coupled Constraints}, 
   author={Liuyuan Jiang and Quan Xiao and Victor M. Tenorio and Fernando Real-Rojas and Antonio G. Marques and Tianyi Chen},
-  journal={arXiv preprint arXiv:2406.10148},
+  booktitle={Neural Information Processing Systems, NeurIPS},
   year={2024}
 }
 ```
@@ -37,3 +37,5 @@ If you find our work interesting, please consider citing this paper:
 <a id="1">[1]</a> Wei Yao, Chengming Yu, Shangzhi Zeng, and Jin Zhang. "Constrained bi-level optimization: Proximal lagrangian value function approach and hessian-free algorithm". arXiv preprint arXiv:2401.16164, 2024. [Code Link](https://github.com/SUSTech-Optimization/LV-HBA)
 
 <a id="2">[2]</a> Siyuan Xu and Minghui Zhu. "Efficient gradient approximation method for constrained bilevel optimization". In _Proceedings of the AAAI Conference on Artificial Intelligence_, 2023. [Code Link](https://github.com/xsy786912649/Efficient-gradient-approximation-method-for-constrained-bilevel-optimization-problem)
+
+<a id="3">[3]</a> Steven Diamond and Stephen Boyd. "CVXPY: A Python-embedded modeling language for convex optimization". _Journal of Machine Learning Research_, 2016.
